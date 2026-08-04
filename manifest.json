@@ -1,0 +1,15 @@
+{
+  "id": "sweet_share",
+  "name": "Sweet Share",
+  "version": "0.1.1",
+  "entry": "main.lua",
+  "api": 2,
+  "profile": "content",
+  "affects_link": false,
+  "category": "GAMEPLAY",
+  "priority": 100,
+  "description": "Party EXP share: full EXP for fighters, half for the bench, with optional ACTIVE / TOP LEVEL gates.",
+  "game_version": ">=0.0.0-0 <2.0.0",
+  "experimental": true,
+  "github": "Zetto22/sweet_share"
+}
