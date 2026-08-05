@@ -90,8 +90,9 @@ local function benchGateLevel(mode, party)
   return nil
 end
 
--- Mirror of engine Experience.gainFor for the amount ctx.applyShare will grant
--- (before any third-party exp.gain wraps). Used only for the share message.
+-- Mirror of engine Experience.gainFor (split divides baseExp first, then
+-- level/7, then traded/trainer). Floor-first means bench is often a few
+-- points off "half of the fighter's line" (e.g. 112 full → ~50 half).
 local function predictGrantedExp(battle, mon, divisor)
   local enemy = battle and battle.enemy
   local defeatedDef = enemy and enemy.def
@@ -120,37 +121,29 @@ local function predictGrantedExp(battle, mon, divisor)
   return math.max(1, amount)
 end
 
-local function benchMessageAmount(battle, recipients)
-  local sample = recipients[1]
+-- Prefer a non-traded sample so the line matches the common (unboosted) grant.
+local function messageSample(recipients)
   for _, mon in ipairs(recipients) do
     if not mon.traded then
-      sample = mon
-      break
+      return mon
     end
   end
-  return predictGrantedExp(battle, sample, BENCH_DIVISOR) or 0
+  return recipients[1]
 end
 
-local function shareLine(mode, receivedCount, allRemainingGotShare, expAmount)
-  if mode == MODE_ON then
-    if allRemainingGotShare then
-      return ("All remaining\nshared %d EXP!"):format(expAmount)
-    end
-    if receivedCount == 1 then
-      return ("1 Pokémon\nshared %d EXP!"):format(expAmount)
-    end
-    return ("%d Pokémon\nshared %d EXP!"):format(receivedCount, expAmount)
+-- Amount is per recipient, not a pot split among them. Same copy for
+-- every mode — ACTIVE / TOP LEVEL only affect who is eligible.
+local function shareLine(receivedCount, allRemainingGotShare, expAmount)
+  if allRemainingGotShare then
+    return ("All remaining Pokémon\ngot %d EXP each!"):format(expAmount)
   end
-  if mode == MODE_ACTIVE then
-    return ("%d shared %d EXP\n(ACTIVE)!"):format(receivedCount, expAmount)
+  if receivedCount == 1 then
+    return ("1 Pokémon got\n%d EXP each!"):format(expAmount)
   end
-  if mode == MODE_TOP then
-    return ("%d shared %d EXP\n(TOP LEVEL)!"):format(receivedCount, expAmount)
-  end
-  return ("%d shared\n%d EXP!"):format(receivedCount, expAmount)
+  return ("%d Pokémon got\n%d EXP each!"):format(receivedCount, expAmount)
 end
 
-local function distributeSweet(ctx)
+local function distributeSweet(mod, ctx)
   local battle = ctx.battle
   local game = battle and battle.game
   local party = game and game.save and game.save.party
@@ -188,10 +181,42 @@ local function distributeSweet(ctx)
     return
   end
 
-  local expAmount = benchMessageAmount(battle, recipients)
-  battle:sayNext(shareLine(mode, n, n == remainingConscious, expAmount))
+  local expected = {}
+  for _, mon in ipairs(recipients) do
+    expected[mon] = predictGrantedExp(battle, mon, BENCH_DIVISOR)
+  end
+
+  local sample = messageSample(recipients)
+  local expAmount = expected[sample] or 0
+  battle:sayNext(shareLine(n, n == remainingConscious, expAmount))
+
+  -- Confirm the silent applyShare grants match the amount we just printed
+  -- (and each mon's own prediction, including traded boosts).
+  local pending = {}
+  for _, mon in ipairs(recipients) do
+    pending[mon] = true
+  end
+  local off = mod.events:on("battle.exp_gained", function(ev)
+    if ev.battle ~= battle or not pending[ev.mon] then
+      return
+    end
+    pending[ev.mon] = nil
+    local want = expected[ev.mon]
+    if want == nil then
+      return
+    end
+    if ev.gained ~= want then
+      mod.log:warn(
+        "bench EXP mismatch for %s: predicted %d, granted %d (message showed %d)",
+        tostring(ev.mon.species or "?"), want, ev.gained or -1, expAmount)
+    end
+  end)
+
   for _, mon in ipairs(recipients) do
     ctx.applyShare(mon, BENCH_DIVISOR, nil)
+  end
+  if off then
+    off()
   end
 end
 
@@ -222,6 +247,6 @@ return function(mod)
     if mode == MODE_OFF then
       return next(ctx)
     end
-    return distributeSweet(ctx)
+    return distributeSweet(mod, ctx)
   end)
 end
