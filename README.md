@@ -36,10 +36,12 @@ In the game **Options** menu, cycle **SWEET EXP SHARE** with LEFT / RIGHT:
 - Content mod (`affects_link: false`).
 - Fainted party members do not receive shared EXP.
 - Pokemon who participated in the battle always receive full EXP in ON / ACTIVE / TOP LEVEL.
-- Bench share text: `All remaining Pokémon got X EXP each!` (or
-  `N Pokémon got X EXP each!` when a gate excludes someone).
+- Bench share text: `The others got` / `X EXP each!`, or
+  `N others got` / `X EXP each!`, or singular `One more got` / `X EXP!`.
+- Disabling the mod in Mod Manager stops sharing and hides the Options
+  row right away (APPLY & RESTART still needed to unload the mod fully).
 - While SWEET EXP SHARE is ON/ACTIVE/TOPLEVEL, the EXP SHARE item is ignored.
-- GitHub releases for in-game Update must use tag **`vX.Y.Z`** (e.g. `v0.1.1`)
+- GitHub releases for in-game Update must use tag **`vX.Y.Z`** (e.g. `v1.0.0`)
   with asset **`sweet_share-X.Y.Z.zip`**. Prefixed tags are ignored by
   the launcher.
 - License: [MIT](LICENSE) · Changes: [CHANGELOG.md](CHANGELOG.md)

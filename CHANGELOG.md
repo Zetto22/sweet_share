@@ -5,6 +5,54 @@ All notable changes to **Sweet Share** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project versions with the `version` field in `manifest.json`.
 
+## [1.0.0] — 2026-08-04
+
+<!-- release-title: First stable release -->
+
+### Added
+
+- First stable release after in-game smoke.
+- Options row **SWEET EXP SHARE**: OFF / ON / ACTIVE / TOP LEVEL (default ON).
+- Fighters get full undivided EXP; eligible conscious bench gets half.
+- ACTIVE / TOP LEVEL gates; fainted bench skipped; Mod Manager disable
+  restores vanilla immediately (staged).
+
+### Changed
+
+- Bench messages fit the 18-column box:
+  `The others got` / `X EXP each!`, `N others got` / `X EXP each!`,
+  or `One more got` / `X EXP!`.
+
+## [0.1.6] — 2026-08-04
+
+<!-- release-title: Shorter share lines under 18 cols -->
+
+### Changed
+
+- Bench lines rewritten to fit the 18-column box with no soft-wrap:
+  `The others got` / `X EXP each!`, `N others got` / `X EXP each!`,
+  or singular `One more got` / `X EXP!`.
+
+## [0.1.5] — 2026-08-04
+
+<!-- release-title: Singular EXP line; real staged disable -->
+
+### Fixed
+
+- Singular bench line is `1 Pokémon got X EXP!` (no “each”).
+- Staged Mod Manager disable is detected via `options.mods[id]` (the entry
+  `mod` object has no live `enabled`); Options row and share stop at once.
+
+## [0.1.4] — 2026-08-04
+
+<!-- release-title: Fit share text; honor staged disable -->
+
+### Fixed
+
+- Bench line fits the GB text box (`All remaining` / `got X EXP each!`).
+- Disabling the mod in Mod Manager (even STAGED, before restart) removes
+  the Options row and restores vanilla EXP award immediately.
+
 ## [0.1.3] — 2026-08-04
 
 <!-- release-title: Unified got-EXP-each share line -->

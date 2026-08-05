@@ -131,16 +131,26 @@ local function messageSample(recipients)
   return recipients[1]
 end
 
--- Amount is per recipient, not a pot split among them. Same copy for
--- every mode — ACTIVE / TOP LEVEL only affect who is eligible.
+-- GB text box = 18 cols; keep each line well under that (no soft-wrap).
 local function shareLine(receivedCount, allRemainingGotShare, expAmount)
-  if allRemainingGotShare then
-    return ("All remaining Pokémon\ngot %d EXP each!"):format(expAmount)
-  end
   if receivedCount == 1 then
-    return ("1 Pokémon got\n%d EXP each!"):format(expAmount)
+    return ("One more got\n%d EXP!"):format(expAmount)
   end
-  return ("%d Pokémon got\n%d EXP each!"):format(receivedCount, expAmount)
+  if allRemainingGotShare then
+    return ("The others got\n%d EXP each!"):format(expAmount)
+  end
+  return ("%d others got\n%d EXP each!"):format(receivedCount, expAmount)
+end
+
+-- Mod Manager DISABLE writes save.options.mods[id]=false immediately
+-- (STAGED); the entry `mod` facade has no live .enabled field.
+local function modIsOn(game, modId)
+  local options = game and game.save and game.save.options
+  local flags = options and options.mods
+  if flags and flags[modId] == false then
+    return false
+  end
+  return true
 end
 
 local function distributeSweet(mod, ctx)
@@ -225,7 +235,7 @@ return function(mod)
 
   mod.hooks:wrap("ui.options.rows", function(next, game, rows)
     local out = next(game, rows)
-    if type(out) ~= "table" then
+    if not modIsOn(game, mod.id) or type(out) ~= "table" then
       return out
     end
     out[#out + 1] = {
@@ -243,7 +253,11 @@ return function(mod)
 
   mod.hooks:wrap("battle.exp_award", function(next, ctx)
     local battle = ctx and ctx.battle
-    local mode = readMode(battle and battle.game)
+    local game = battle and battle.game
+    if not modIsOn(game, mod.id) then
+      return next(ctx)
+    end
+    local mode = readMode(game)
     if mode == MODE_OFF then
       return next(ctx)
     end
