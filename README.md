@@ -14,7 +14,7 @@ party members get **half**, optionally gated by level.
 When **S. EXP SHARE** is OFF: the stock award (or another EXP-share mod)
 runs, and **S. LEVEL CAP** can still filter who gets EXP.
 
-**GYM LEVEL** is a hard cap from the next gym leader (or post-game rules
+**GYM LVL** is a hard cap from the next gym leader (or post-game rules
 below): anyone at or above that level gets no EXP.
 
 Works on **Red / Blue / Yellow** and **Gold**.
@@ -31,15 +31,15 @@ Works on **Red / Blue / Yellow** and **Gold**.
 | Option | Values | Meaning |
 |--------|--------|---------|
 | **S. EXP SHARE** | OFF / ON | ON = Sweet’s full/half share (default ON). OFF = vanilla or another share mod. |
-| **S. LEVEL CAP** | OFF / ACTIVE / TOP LEVEL / **GYM LEVEL** | See below (default OFF). |
+| **S. LEVEL CAP** | OFF / ACTIVE / TOP LVL / **GYM LVL** | See below (default OFF). |
 
 | EXP SHARE | LEVEL CAP | Result |
 |-----------|-----------|--------|
 | ON | OFF | Sweet share, whole bench |
-| ON | ACTIVE / TOP | Sweet share + soft bench cap |
-| ON | GYM LEVEL | Sweet share + hard gym/post-game cap |
+| ON | ACTIVE / TOP LVL | Sweet share + soft bench cap |
+| ON | GYM LVL | Sweet share + hard gym/post-game cap |
 | OFF | OFF | Fully vanilla / other mods |
-| OFF | ACTIVE / TOP / GYM | Vanilla / Other mods + cap |
+| OFF | ACTIVE / TOP LVL / GYM LVL | Vanilla / Other mods + cap |
 
 ### Level Cap modes
 
@@ -47,10 +47,10 @@ Works on **Red / Blue / Yellow** and **Gold**.
 |------|----------------|-----------|
 | OFF | Nobody | — |
 | ACTIVE | Non-fighters only | Below party slot 1’s level |
-| TOP LEVEL | Non-fighters only | Below the party’s highest level |
-| **GYM LEVEL** | **Everyone** (hard) | Story-based cap (see below). Anyone at or above the cap gets no EXP. |
+| TOP LVL | Non-fighters only | Below the party’s highest level |
+| **GYM LVL** | **Everyone** (hard) | Story-based cap (see below). Anyone at or above the cap gets no EXP. |
 
-### GYM LEVEL — Gen 1 RBY
+### GYM LVL — Gen 1 RBY
 
 Hard cap: nobody at or above the threshold gains EXP. The number is the
 **highest level** on that boss’s party (read live from trainer data, so
@@ -72,7 +72,7 @@ Example: with **0 badges**, a Pokémon at Brock’s Onix level (or higher)
 gains no EXP. After the Boulder Badge, the cap becomes Misty’s ace, and
 so on until the Champion.
 
-### GYM LEVEL — Gen 2 GSC
+### GYM LVL — Gen 2 GSC
 
 Same hard-cap rule; the ladder continues through Johto, the League,
 Kanto, a rematch, then Red.
@@ -106,5 +106,5 @@ Kanto, a rematch, then Red.
 - Gym levels are read from `trainers` at runtime — party edits by other mods count.
 - Fainted mons and eggs never receive Sweet/capped grants.
 - While **S. EXP SHARE** is ON, Gen 1 EXP.ALL / Gen 2 held EXP.SHARE vanilla passes are replaced; on Gold, unequip EXP.SHARE if you want stat EXP free of the item tax.
-- GitHub releases: tag **`v1.1.0`** + asset **`sweet_share-1.1.0.zip`**.
+- GitHub releases: tag **`v1.1.1`** + asset **`sweet_share-1.1.1.zip`**.
 - License: [MIT](LICENSE) · Changes: [CHANGELOG.md](CHANGELOG.md)

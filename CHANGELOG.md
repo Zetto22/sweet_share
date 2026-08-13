@@ -5,6 +5,14 @@ All notable changes to **Sweet Share** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project versions with the `version` field in `manifest.json`.
 
+## [1.1.1] — 2026-08-13
+
+<!-- release-title: Shorter level-cap option labels -->
+
+### Changed
+
+- Options values change from **TOP LEVEL** and **GYM LEVEL** to **TOP LVL** and **GYM LVL** (fit the Options box).
+
 ## [1.1.0] — 2026-08-13
 
 <!-- release-title: Gen 2, split Options, gym level cap -->

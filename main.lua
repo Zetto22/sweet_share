@@ -23,8 +23,8 @@ local CAP_CYCLE = { OFF, ACTIVE, TOP, GYM }
 local CAP_LABEL = {
   [OFF] = "OFF",
   [ACTIVE] = "ACTIVE",
-  [TOP] = "TOP LEVEL",
-  [GYM] = "GYM LEVEL",
+  [TOP] = "TOP LVL",
+  [GYM] = "GYM LVL",
 }
 
 -- Divisors passed to ctx.applyShare (engine divides base EXP by this).
