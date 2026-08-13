@@ -1,66 +1,139 @@
 -- Sweet Share: full EXP for fighters, half for the bench, optional
--- ACTIVE / TOP LEVEL gates. Wraps battle.exp_award only.
+-- level gates. Two Options rows. Wraps battle.exp_award (Gen 1 + Gen 2).
 
-local OPTION_KEY = "sweetShare"
-local ROW_ID = "sweet_exp_share"
-local ROW_LABEL = "SWEET EXP SHARE"
+local SHARE_KEY = "sweetShare"
+local SHARE_ROW_ID = "sweet_exp_share"
+local SHARE_ROW_LABEL = "S. EXP SHARE"
 
-local MODE_OFF = "off"
-local MODE_ON = "on"
-local MODE_ACTIVE = "active"
-local MODE_TOP = "top"
+local CAP_KEY = "sweetLevelCap"
+local CAP_ROW_ID = "sweet_level_cap"
+local CAP_ROW_LABEL = "S. LEVEL CAP"
 
-local MODE_CYCLE = { MODE_OFF, MODE_ON, MODE_ACTIVE, MODE_TOP }
-local MODE_LABEL = {
-  [MODE_OFF] = "OFF",
-  [MODE_ON] = "ON",
-  [MODE_ACTIVE] = "ACTIVE",
-  [MODE_TOP] = "TOP LEVEL",
+local OFF = "off"
+local ON = "on"
+local ACTIVE = "active"
+local TOP = "top"
+local GYM = "gym"
+
+local SHARE_CYCLE = { OFF, ON }
+local SHARE_LABEL = { [OFF] = "OFF", [ON] = "ON" }
+
+-- OFF = no gate. ACTIVE / TOP = soft (bench only). GYM = hard (everyone).
+local CAP_CYCLE = { OFF, ACTIVE, TOP, GYM }
+local CAP_LABEL = {
+  [OFF] = "OFF",
+  [ACTIVE] = "ACTIVE",
+  [TOP] = "TOP LEVEL",
+  [GYM] = "GYM LEVEL",
 }
 
 -- Divisors passed to ctx.applyShare (engine divides base EXP by this).
 local FIGHTER_DIVISOR = 1
 local BENCH_DIVISOR = 2
 
-local function readMode(game)
-  local options = game and game.save and game.save.options
-  local raw = options and options[OPTION_KEY]
-  if raw == MODE_OFF or raw == MODE_ON or raw == MODE_ACTIVE or raw == MODE_TOP then
-    return raw
-  end
-  return MODE_ON
+-- While we own the award, Gen 2's applyShare still closes over `halved`
+-- from any EXP_SHARE holder. Clear it on exp.gain so Sweet modes are not
+-- taxed by the held item (stat-exp may still see halved — unequip to be safe).
+local suppressShareTax = false
+
+local function optionsTable(game)
+  return game and game.save and game.save.options
 end
 
-local function writeMode(game, mode)
-  local options = game and game.save and game.save.options
-  if not options then return false end
-  options[OPTION_KEY] = mode
-  if game.writeOptions then
+local function writeOptions(game)
+  if game and game.writeOptions then
     game:writeOptions()
   end
+end
+
+-- Migrate legacy single-dial sweetShare (off/on/active/top) into share + cap.
+local function migrateLegacy(options)
+  if type(options) ~= "table" then
+    return
+  end
+  local legacy = options[SHARE_KEY]
+  if legacy == ACTIVE or legacy == TOP then
+    options[SHARE_KEY] = ON
+    if options[CAP_KEY] == nil then
+      options[CAP_KEY] = legacy
+    end
+  elseif legacy == ON or legacy == OFF then
+    -- share already on/off; default cap OFF preserves old ungated ON
+    if options[CAP_KEY] == nil then
+      options[CAP_KEY] = OFF
+    end
+  elseif legacy ~= nil and legacy ~= ON and legacy ~= OFF then
+    options[SHARE_KEY] = ON
+    if options[CAP_KEY] == nil then
+      options[CAP_KEY] = OFF
+    end
+  end
+end
+
+local function readShare(game)
+  local options = optionsTable(game)
+  migrateLegacy(options)
+  local raw = options and options[SHARE_KEY]
+  if raw == OFF or raw == ON then
+    return raw
+  end
+  return ON
+end
+
+local function writeShare(game, value)
+  local options = optionsTable(game)
+  if not options then return false end
+  migrateLegacy(options)
+  options[SHARE_KEY] = value
+  writeOptions(game)
   return true
 end
 
-local function cycleMode(game, direction)
-  local current = readMode(game)
+local function readCap(game)
+  local options = optionsTable(game)
+  migrateLegacy(options)
+  local raw = options and options[CAP_KEY]
+  if raw == OFF or raw == ACTIVE or raw == TOP or raw == GYM then
+    return raw
+  end
+  return OFF
+end
+
+local function writeCap(game, value)
+  local options = optionsTable(game)
+  if not options then return false end
+  migrateLegacy(options)
+  options[CAP_KEY] = value
+  writeOptions(game)
+  return true
+end
+
+local function cycleValue(cycle, current, direction)
   local index = 1
-  for i, mode in ipairs(MODE_CYCLE) do
-    if mode == current then
+  for i, value in ipairs(cycle) do
+    if value == current then
       index = i
       break
     end
   end
-  local count = #MODE_CYCLE
-  local nextIndex = ((index - 1 + (direction or 1)) % count) + 1
-  local nextMode = MODE_CYCLE[nextIndex]
-  if not writeMode(game, nextMode) then
-    return nil
-  end
-  return nextMode
+  local count = #cycle
+  return cycle[((index - 1 + (direction or 1)) % count) + 1]
 end
 
-local function modeLabel(game)
-  return MODE_LABEL[readMode(game)]
+local function cycleShare(game, direction)
+  local nextValue = cycleValue(SHARE_CYCLE, readShare(game), direction)
+  if not writeShare(game, nextValue) then
+    return nil
+  end
+  return nextValue
+end
+
+local function cycleCap(game, direction)
+  local nextValue = cycleValue(CAP_CYCLE, readCap(game), direction)
+  if not writeCap(game, nextValue) then
+    return nil
+  end
+  return nextValue
 end
 
 local function slotOneLevel(party)
@@ -80,20 +153,76 @@ local function partyTopLevel(party)
   return top
 end
 
-local function benchGateLevel(mode, party)
-  if mode == MODE_ACTIVE then
-    return slotOneLevel(party)
+-- Returns gate level and whether the cap is hard (blocks fighters too).
+local gymCapsMod
+local function loadGymCaps(mod)
+  if gymCapsMod then return gymCapsMod end
+  local path = (mod and mod.path or ".") .. "/gym_caps.lua"
+  local chunk, err = loadfile(path)
+  if not chunk then
+    error("sweet_share: cannot load gym_caps.lua (" .. tostring(err) .. ")")
   end
-  if mode == MODE_TOP then
-    return partyTopLevel(party)
-  end
-  return nil
+  gymCapsMod = chunk()
+  return gymCapsMod
 end
 
--- Mirror of engine Experience.gainFor (split divides baseExp first, then
--- level/7, then traded/trainer). Floor-first means bench is often a few
--- points off "half of the fighter's line" (e.g. 112 full → ~50 half).
-local function predictGrantedExp(battle, mon, divisor)
+local function resolveGate(mod, game, cap, party)
+  if cap == ACTIVE then
+    return slotOneLevel(party), false
+  end
+  if cap == TOP then
+    return partyTopLevel(party), false
+  end
+  if cap == GYM then
+    return loadGymCaps(mod).resolve(mod, game), true
+  end
+  return nil, false
+end
+
+local function blockedByGate(mon, gate, hard, fought)
+  if not monConscious(mon) then
+    return true
+  end
+  if gate == nil then
+    return false
+  end
+  if (mon.level or 1) < gate then
+    return false
+  end
+  if hard then
+    return true
+  end
+  return not fought[mon]
+end
+
+-- Gen 2 award ctx carries loser / holders; Gen 1 does not.
+local function isGen2Award(ctx)
+  return type(ctx) == "table" and (ctx.loser ~= nil or ctx.holders ~= nil)
+end
+
+local function monConscious(mon)
+  return mon and (mon.hp or 0) > 0 and not mon.isEgg
+end
+
+local function partyOf(battle, game)
+  if battle and type(battle.party) == "table" then
+    return battle.party
+  end
+  return game and game.save and game.save.party
+end
+
+local function isTraded(battle, mon)
+  if mon and mon.traded then
+    return true
+  end
+  if battle and type(battle.isOutsider) == "function" then
+    return battle:isOutsider(mon) and true or false
+  end
+  return false
+end
+
+-- Gen 1: mirror Experience.gainFor (split divides baseExp first).
+local function predictGrantedExpGen1(battle, mon, divisor)
   local enemy = battle and battle.enemy
   local defeatedDef = enemy and enemy.def
   local foe = enemy and enemy.mon
@@ -121,10 +250,61 @@ local function predictGrantedExp(battle, mon, divisor)
   return math.max(1, amount)
 end
 
+-- Gen 2: mirror Mon.experienceGain with halved forced off (Sweet owns the split).
+local function predictGrantedExpGen2(battle, ctx, mon, divisor)
+  local loser = ctx and ctx.loser
+  if not loser then
+    return nil
+  end
+  local def = nil
+  if battle and type(battle.speciesDef) == "function" then
+    def = battle:speciesDef(loser)
+  end
+  def = def or loser.def
+  if not def then
+    return nil
+  end
+
+  local baseExp = def.baseExp or 0
+  local value = math.floor(baseExp * (loser.level or 1) / 7)
+  value = math.floor(value / math.max(1, divisor or 1))
+  if isTraded(battle, mon) then
+    value = math.floor(value * 3 / 2)
+  end
+  if battle.trainer ~= nil then
+    value = math.floor(value * 3 / 2)
+  end
+  if mon and mon.item == "LUCKY_EGG" then
+    value = math.floor(value * 3 / 2)
+  end
+  return math.max(1, value)
+end
+
+local function predictGrantedExp(ctx, mon, divisor)
+  local battle = ctx and ctx.battle
+  if isGen2Award(ctx) then
+    return predictGrantedExpGen2(battle, ctx, mon, divisor)
+  end
+  return predictGrantedExpGen1(battle, mon, divisor)
+end
+
+local function sayShare(battle, text)
+  if not battle or type(text) ~= "string" then
+    return
+  end
+  if type(battle.sayNext) == "function" then
+    battle:sayNext(text)
+    return
+  end
+  if type(battle.emit) == "function" then
+    battle:emit({ kind = "message", text = text })
+  end
+end
+
 -- Prefer a non-traded sample so the line matches the common (unboosted) grant.
-local function messageSample(recipients)
+local function messageSample(battle, recipients)
   for _, mon in ipairs(recipients) do
-    if not mon.traded then
+    if not isTraded(battle, mon) then
       return mon
     end
   end
@@ -156,82 +336,136 @@ end
 local function distributeSweet(mod, ctx)
   local battle = ctx.battle
   local game = battle and battle.game
-  local party = game and game.save and game.save.party
+  local party = partyOf(battle, game)
   if not party or type(ctx.applyShare) ~= "function" then
     return
   end
 
-  local mode = readMode(game)
+  local cap = readCap(game)
+  local gate, hard = resolveGate(mod, game, cap, party)
   local alive = ctx.alive or {}
 
   local fought = {}
   for _, mon in ipairs(alive) do
-    fought[mon] = true
+    if monConscious(mon) then
+      fought[mon] = true
+    end
   end
 
-  for _, mon in ipairs(alive) do
-    ctx.applyShare(mon, FIGHTER_DIVISOR, true)
-  end
-
-  local gate = benchGateLevel(mode, party)
-  local recipients = {}
-  local remainingConscious = 0
-
-  for _, mon in ipairs(party) do
-    if mon.hp and mon.hp > 0 and not fought[mon] then
-      remainingConscious = remainingConscious + 1
-      if gate == nil or (mon.level or 1) < gate then
-        recipients[#recipients + 1] = mon
+  suppressShareTax = true
+  local ok, err = xpcall(function()
+    for _, mon in ipairs(alive) do
+      if not blockedByGate(mon, gate, hard, fought) then
+        ctx.applyShare(mon, FIGHTER_DIVISOR, true)
       end
     end
-  end
 
-  local n = #recipients
-  if n == 0 then
-    return
-  end
+    local recipients = {}
+    local remainingConscious = 0
 
-  local expected = {}
-  for _, mon in ipairs(recipients) do
-    expected[mon] = predictGrantedExp(battle, mon, BENCH_DIVISOR)
-  end
+    for _, mon in ipairs(party) do
+      if monConscious(mon) and not fought[mon] then
+        remainingConscious = remainingConscious + 1
+        if not blockedByGate(mon, gate, hard, fought) then
+          recipients[#recipients + 1] = mon
+        end
+      end
+    end
 
-  local sample = messageSample(recipients)
-  local expAmount = expected[sample] or 0
-  battle:sayNext(shareLine(n, n == remainingConscious, expAmount))
-
-  -- Confirm the silent applyShare grants match the amount we just printed
-  -- (and each mon's own prediction, including traded boosts).
-  local pending = {}
-  for _, mon in ipairs(recipients) do
-    pending[mon] = true
-  end
-  local off = mod.events:on("battle.exp_gained", function(ev)
-    if ev.battle ~= battle or not pending[ev.mon] then
+    local n = #recipients
+    if n == 0 then
       return
     end
-    pending[ev.mon] = nil
-    local want = expected[ev.mon]
-    if want == nil then
+
+    local expected = {}
+    for _, mon in ipairs(recipients) do
+      expected[mon] = predictGrantedExp(ctx, mon, BENCH_DIVISOR)
+    end
+
+    local sample = messageSample(battle, recipients)
+    local expAmount = expected[sample] or 0
+    sayShare(battle, shareLine(n, n == remainingConscious, expAmount))
+
+    local pending = {}
+    for _, mon in ipairs(recipients) do
+      pending[mon] = true
+    end
+    local off = mod.events:on("battle.exp_gained", function(ev)
+      if ev.battle ~= battle or not pending[ev.mon] then
+        return
+      end
+      pending[ev.mon] = nil
+      local want = expected[ev.mon]
+      if want == nil then
+        return
+      end
+      if ev.gained ~= want then
+        mod.log:warn(
+          "bench EXP mismatch for %s: predicted %d, granted %d (message showed %d)",
+          tostring(ev.mon.species or "?"), want, ev.gained or -1, expAmount)
+      end
+    end)
+
+    for _, mon in ipairs(recipients) do
+      ctx.applyShare(mon, BENCH_DIVISOR, nil)
+    end
+    if off then
+      off()
+    end
+  end, debug.traceback)
+  suppressShareTax = false
+  if not ok then
+    error(err)
+  end
+end
+
+-- Share OFF + cap ON: let vanilla / other award mods run, but filter applyShare.
+local function withLevelCap(mod, ctx, game, nextFn)
+  local cap = readCap(game)
+  if cap == OFF then
+    return nextFn(ctx)
+  end
+  local battle = ctx.battle
+  local party = partyOf(battle, battle and battle.game or game)
+  local gate, hard = resolveGate(mod, game, cap, party)
+  if gate == nil and cap ~= GYM then
+    return nextFn(ctx)
+  end
+  -- GYM with missing trainer data: fail open (no filter) rather than softlock EXP.
+  if gate == nil then
+    return nextFn(ctx)
+  end
+
+  local fought = {}
+  for _, mon in ipairs(ctx.alive or {}) do
+    if mon then
+      fought[mon] = true
+    end
+  end
+
+  local rawApply = ctx.applyShare
+  if type(rawApply) ~= "function" then
+    return nextFn(ctx)
+  end
+
+  ctx.applyShare = function(mon, split, announce)
+    if blockedByGate(mon, gate, hard, fought) then
       return
     end
-    if ev.gained ~= want then
-      mod.log:warn(
-        "bench EXP mismatch for %s: predicted %d, granted %d (message showed %d)",
-        tostring(ev.mon.species or "?"), want, ev.gained or -1, expAmount)
-    end
-  end)
-
-  for _, mon in ipairs(recipients) do
-    ctx.applyShare(mon, BENCH_DIVISOR, nil)
+    return rawApply(mon, split, announce)
   end
-  if off then
-    off()
-  end
+  return nextFn(ctx)
 end
 
 return function(mod)
   mod.log:info("carregado")
+
+  mod.hooks:wrap("exp.gain", function(next, ctx)
+    if suppressShareTax and type(ctx) == "table" and ctx.halved then
+      ctx.halved = false
+    end
+    return next(ctx)
+  end)
 
   mod.hooks:wrap("ui.options.rows", function(next, game, rows)
     local out = next(game, rows)
@@ -239,13 +473,23 @@ return function(mod)
       return out
     end
     out[#out + 1] = {
-      id = ROW_ID,
-      label = ROW_LABEL,
+      id = SHARE_ROW_ID,
+      label = SHARE_ROW_LABEL,
       value = function(g)
-        return modeLabel(g)
+        return SHARE_LABEL[readShare(g)]
       end,
       step = function(g, dir)
-        return cycleMode(g, dir) ~= nil
+        return cycleShare(g, dir) ~= nil
+      end,
+    }
+    out[#out + 1] = {
+      id = CAP_ROW_ID,
+      label = CAP_ROW_LABEL,
+      value = function(g)
+        return CAP_LABEL[readCap(g)]
+      end,
+      step = function(g, dir)
+        return cycleCap(g, dir) ~= nil
       end,
     }
     return out
@@ -257,10 +501,9 @@ return function(mod)
     if not modIsOn(game, mod.id) then
       return next(ctx)
     end
-    local mode = readMode(game)
-    if mode == MODE_OFF then
-      return next(ctx)
+    if readShare(game) == ON then
+      return distributeSweet(mod, ctx)
     end
-    return distributeSweet(mod, ctx)
+    return withLevelCap(mod, ctx, game, next)
   end)
 end
