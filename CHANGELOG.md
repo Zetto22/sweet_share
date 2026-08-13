@@ -11,28 +11,16 @@ and this project versions with the `version` field in `manifest.json`.
 
 ### Added
 
-- Runs on **Pokémon Gold** as well as Red/Blue/Yellow (`games`: gen1 + gen2).
-- Gen 2 award path: battle text via `emit`, EXP prediction matches Gold’s
-  formula (Lucky Egg / outsider / trainer), eggs skipped on the bench.
-- **S. EXP SHARE OFF** + level cap: vanilla (or another `battle.exp_award`
-  mod) still runs; `applyShare` is filtered so the cap works alone or with
-  other EXP-share mods.
-- **S. LEVEL CAP → GYM LEVEL** (hard cap): threshold is the next gym
-  leader’s strongest Pokémon. After 8 badges, Gen 1 uses the Champion
-  rival (`OPP_RIVAL3`, else Lance). On Gold: Johto gyms → first Lance → max Kanto leaders →
-  rematch Lance (after 8 Kanto badges; HoF count &lt; 2) → Red (HoF count ≥ 2).
+- Support to **Pokémon Gold** / Gen 2.
+- Level cap works with Sweet Share off (works with other EXP mods).
+- **GYM LEVEL** hard cap (next gym / story bosses; see README).
 
 ### Changed
 
-- Options split into two rows:
-  - **S. EXP SHARE** — OFF / ON (default ON)
-  - **S. LEVEL CAP** — OFF / ACTIVE / TOP LEVEL / GYM LEVEL (default OFF)
-- Level cap is independent of Sweet’s own share toggle.
-- Legacy single-dial `sweetShare` values (`active` / `top`) migrate to
-  share ON + the matching cap; old `on` keeps an ungated bench (cap OFF).
-- While Sweet share is ON, Gen 2’s held **EXP.SHARE** tax is cleared on
-  `exp.gain` so modes are not halved by the item (unequip to keep stat EXP
-  fully untaxed).
+- Options split into **S. EXP SHARE** and **S. LEVEL CAP**.
+- Level cap is independent from the share toggle.
+- Legacy single-option saves migrate to the new rows.
+- Ignores the held EXP.SHARE item while Sweet Share is on.
 
 ## [1.0.0] — 2026-08-04
 
