@@ -106,5 +106,5 @@ Kanto, a rematch, then Red.
 - Gym levels are read from `trainers` at runtime — party edits by other mods count.
 - Fainted mons and eggs never receive Sweet/capped grants.
 - While **S. EXP SHARE** is ON, Gen 1 EXP.ALL / Gen 2 held EXP.SHARE vanilla passes are replaced; on Gold, unequip EXP.SHARE if you want stat EXP free of the item tax.
-- GitHub releases: tag **`v1.1.1`** + asset **`sweet_share-1.1.1.zip`**.
+- GitHub releases: tag **`v1.1.2`** + asset **`sweet_share-1.1.2.zip`**.
 - License: [MIT](LICENSE) · Changes: [CHANGELOG.md](CHANGELOG.md)

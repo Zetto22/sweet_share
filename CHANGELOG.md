@@ -7,16 +7,18 @@ and this project versions with the `version` field in `manifest.json`.
 
 ## [1.1.2] — 2026-08-13
 
-<!-- release-title: Fix Gen 2 EXP share award path -->
+<!-- release-title: Fix Gen 2 EXP share and level-cap awards -->
 
 ### Fixed
 
-- Gen 2 battles resolve the live game via `mod.game` (Battle has no `.game`), so
-  share/cap options are read during awards instead of falling back to defaults.
-- Load `gym_caps.lua` via `mod:read` (LÖVE FS); a failed loadfile was skipping
-  the whole `battle.exp_award` hook and leaving vanilla split-only EXP.
-- Persist Options on Gold through `persistOptions` (Gen 1 still uses
-  `writeOptions`).
+- On Gold, Sweet Share and level-cap options apply correctly in battle.
+- Bench Pokémon get half EXP again (including with ACTIVE / TOP LVL / GYM LVL).
+- After the share summary, Gold no longer shows each bench mon’s individual
+  “gained EXP” line (level-ups still show).
+
+### Changed
+
+- Share summary always shows the count (`2 others got…` / `One more got…`).
 
 ## [1.1.1] — 2026-08-13
 
