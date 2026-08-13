@@ -36,12 +36,41 @@ local BENCH_DIVISOR = 2
 -- taxed by the held item (stat-exp may still see halved — unequip to be safe).
 local suppressShareTax = false
 
-local function optionsTable(game)
-  return game and game.save and game.save.options
+-- Gen 2 Battle has .save but not .game; options live on Game2.options and are
+-- mirrored to save.options. Prefer the live game, then battle.save.options.
+local function resolveGame(mod, battle)
+  if battle and battle.game then
+    return battle.game
+  end
+  if mod and mod.game then
+    return mod.game
+  end
+  return nil
+end
+
+local function optionsTable(game, battle)
+  if game then
+    if game.save and type(game.save.options) == "table" then
+      return game.save.options
+    end
+    if type(game.options) == "table" then
+      return game.options
+    end
+  end
+  if battle and battle.save and type(battle.save.options) == "table" then
+    return battle.save.options
+  end
+  return nil
 end
 
 local function writeOptions(game)
-  if game and game.writeOptions then
+  if not game then
+    return
+  end
+  -- Gen 2 persists via persistOptions; Gen 1 via writeOptions.
+  if type(game.persistOptions) == "function" then
+    game:persistOptions()
+  elseif type(game.writeOptions) == "function" then
     game:writeOptions()
   end
 end
@@ -70,8 +99,8 @@ local function migrateLegacy(options)
   end
 end
 
-local function readShare(game)
-  local options = optionsTable(game)
+local function readShare(game, battle)
+  local options = optionsTable(game, battle)
   migrateLegacy(options)
   local raw = options and options[SHARE_KEY]
   if raw == OFF or raw == ON then
@@ -89,8 +118,8 @@ local function writeShare(game, value)
   return true
 end
 
-local function readCap(game)
-  local options = optionsTable(game)
+local function readCap(game, battle)
+  local options = optionsTable(game, battle)
   migrateLegacy(options)
   local raw = options and options[CAP_KEY]
   if raw == OFF or raw == ACTIVE or raw == TOP or raw == GYM then
@@ -155,12 +184,20 @@ end
 
 -- Returns gate level and whether the cap is hard (blocks fighters too).
 local gymCapsMod
+-- Sibling via love FS (mod:read), not Lua loadfile — same pitfall as dex_radar.
 local function loadGymCaps(mod)
   if gymCapsMod then return gymCapsMod end
-  local path = (mod and mod.path or ".") .. "/gym_caps.lua"
-  local chunk, err = loadfile(path)
+  if not (mod and mod.read) then
+    error("sweet_share: cannot load gym_caps.lua (no mod:read)")
+  end
+  local src, readErr = mod:read("gym_caps.lua")
+  if type(src) ~= "string" or src == "" then
+    error("sweet_share: cannot load gym_caps.lua (" .. tostring(readErr or "empty") .. ")")
+  end
+  local loader = loadstring or load
+  local chunk, err = loader(src, "@sweet_share/gym_caps.lua")
   if not chunk then
-    error("sweet_share: cannot load gym_caps.lua (" .. tostring(err) .. ")")
+    error("sweet_share: cannot compile gym_caps.lua (" .. tostring(err) .. ")")
   end
   gymCapsMod = chunk()
   return gymCapsMod
@@ -174,7 +211,16 @@ local function resolveGate(mod, game, cap, party)
     return partyTopLevel(party), false
   end
   if cap == GYM then
-    return loadGymCaps(mod).resolve(mod, game), true
+    local ok, gateOrErr = pcall(function()
+      return loadGymCaps(mod).resolve(mod, game)
+    end)
+    if not ok then
+      if mod and mod.log then
+        mod.log:warn("gym cap unavailable: %s", tostring(gateOrErr))
+      end
+      return nil, false
+    end
+    return gateOrErr, true
   end
   return nil, false
 end
@@ -324,8 +370,8 @@ end
 
 -- Mod Manager DISABLE writes save.options.mods[id]=false immediately
 -- (STAGED); the entry `mod` facade has no live .enabled field.
-local function modIsOn(game, modId)
-  local options = game and game.save and game.save.options
+local function modIsOn(game, modId, battle)
+  local options = optionsTable(game, battle)
   local flags = options and options.mods
   if flags and flags[modId] == false then
     return false
@@ -335,13 +381,13 @@ end
 
 local function distributeSweet(mod, ctx)
   local battle = ctx.battle
-  local game = battle and battle.game
+  local game = resolveGame(mod, battle)
   local party = partyOf(battle, game)
   if not party or type(ctx.applyShare) ~= "function" then
     return
   end
 
-  local cap = readCap(game)
+  local cap = readCap(game, battle)
   local gate, hard = resolveGate(mod, game, cap, party)
   local alive = ctx.alive or {}
 
@@ -379,12 +425,15 @@ local function distributeSweet(mod, ctx)
 
     local expected = {}
     for _, mon in ipairs(recipients) do
-      expected[mon] = predictGrantedExp(ctx, mon, BENCH_DIVISOR)
+      local okPred, amount = pcall(predictGrantedExp, ctx, mon, BENCH_DIVISOR)
+      if okPred then
+        expected[mon] = amount
+      end
     end
 
     local sample = messageSample(battle, recipients)
     local expAmount = expected[sample] or 0
-    sayShare(battle, shareLine(n, n == remainingConscious, expAmount))
+    pcall(sayShare, battle, shareLine(n, n == remainingConscious, expAmount))
 
     local pending = {}
     for _, mon in ipairs(recipients) do
@@ -421,12 +470,12 @@ end
 
 -- Share OFF + cap ON: let vanilla / other award mods run, but filter applyShare.
 local function withLevelCap(mod, ctx, game, nextFn)
-  local cap = readCap(game)
+  local battle = ctx.battle
+  local cap = readCap(game, battle)
   if cap == OFF then
     return nextFn(ctx)
   end
-  local battle = ctx.battle
-  local party = partyOf(battle, battle and battle.game or game)
+  local party = partyOf(battle, game)
   local gate, hard = resolveGate(mod, game, cap, party)
   if gate == nil and cap ~= GYM then
     return nextFn(ctx)
@@ -497,11 +546,11 @@ return function(mod)
 
   mod.hooks:wrap("battle.exp_award", function(next, ctx)
     local battle = ctx and ctx.battle
-    local game = battle and battle.game
-    if not modIsOn(game, mod.id) then
+    local game = resolveGame(mod, battle)
+    if not modIsOn(game, mod.id, battle) then
       return next(ctx)
     end
-    if readShare(game) == ON then
+    if readShare(game, battle) == ON then
       return distributeSweet(mod, ctx)
     end
     return withLevelCap(mod, ctx, game, next)
