@@ -31,6 +31,11 @@ local CAP_LABEL = {
 local FIGHTER_DIVISOR = 1
 local BENCH_DIVISOR = 2
 
+-- gen1recomp 0.1.84+ sandbox omits `debug`; never pass debug.traceback to xpcall.
+local function traceErr(err)
+  return tostring(err)
+end
+
 -- While we own the award, Gen 2's applyShare still closes over `halved`
 -- from any EXP_SHARE holder. Clear it on exp.gain so Sweet modes are not
 -- taxed by the held item (stat-exp may still see halved — unequip to be safe).
@@ -479,7 +484,7 @@ local function distributeSweetGen2(mod, ctx, nextFn)
         battle:giveExperiencePass(loser, def, benchIdx, BENCH_DIVISOR, false)
         silenceBenchExpEvents(battle, benchIdx)
       end
-    end, debug.traceback)
+    end, traceErr)
     suppressShareTax = false
     if not ok then
       mod.log:warn("gen2 gated award failed: %s", tostring(err))
@@ -618,7 +623,7 @@ local function distributeSweetGen1(mod, ctx)
     if off then
       off()
     end
-  end, debug.traceback)
+  end, traceErr)
   suppressShareTax = false
   if not ok then
     error(err)

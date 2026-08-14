@@ -5,6 +5,15 @@ All notable changes to **Sweet Share** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project versions with the `version` field in `manifest.json`.
 
+## [1.1.4] — 2026-08-14
+
+<!-- release-title: Fix crash under mod sandbox -->
+
+### Fixed
+
+- Works again on gen1recomp **0.1.84+** (mod sandbox): Gen 1 EXP share and
+  Gen 2 awards with a level cap no longer silently fall back to vanilla.
+
 ## [1.1.3] — 2026-08-13
 
 <!-- release-title: Fix Gen 2 EXP share and level-cap awards -->
