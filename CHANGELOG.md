@@ -5,6 +5,16 @@ All notable changes to **Sweet Share** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project versions with the `version` field in `manifest.json`.
 
+## [1.2.0] — 2026-08-20
+
+<!-- release-title: GYM LVL follows live trainer parties -->
+
+### Changed
+
+- **GYM LVL** reads the same live boss party battle uses (`trainer.party`
+  hook), so difficulty mods that raise gym/E4 teams (e.g. Stronger Trainers)
+  raise the cap automatically — no per-mod wiring.
+
 ## [1.1.4] — 2026-08-14
 
 <!-- release-title: Fix crash under mod sandbox -->

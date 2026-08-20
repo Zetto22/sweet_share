@@ -1,6 +1,8 @@
 -- Gym / post-game level caps for Sweet Share (Gen 1 + Gen 2).
--- Levels are read live from mod.content.trainers so ROM/mods that change
--- leader parties update the cap automatically.
+-- Cap levels come from the live boss party: registry data first, then the
+-- `trainer.party` hook chain (same path battle setup uses). Mods that patch
+-- `content.trainers` or wrap `trainer.party` (e.g. Stronger Trainers) raise
+-- the cap automatically — no per-mod integration.
 
 local M = {}
 
@@ -68,16 +70,62 @@ local function maxLevelInParty(party)
   return max
 end
 
+-- Shallow copy so a hook that mutates slots cannot dirty the registry.
+local function copyParty(party)
+  if type(party) ~= "table" then return party end
+  local out = {}
+  for i, slot in ipairs(party) do
+    if type(slot) == "table" then
+      local row = {}
+      for k, v in pairs(slot) do
+        row[k] = v
+      end
+      out[i] = row
+    else
+      out[i] = slot
+    end
+  end
+  return out
+end
+
+-- Same call shape as BattleState:startTrainer / Gen2 Battle setup.
+local function throughTrainerPartyHook(classId, partyKey, vanillaParty)
+  if type(vanillaParty) ~= "table" then
+    return vanillaParty
+  end
+  local okRt, Runtime = pcall(require, "src.mods.Runtime")
+  if not okRt or type(Runtime) ~= "table" or type(Runtime.call) ~= "function" then
+    return vanillaParty
+  end
+  if type(Runtime.wantsHook) == "function" and not Runtime.wantsHook("trainer.party") then
+    return vanillaParty
+  end
+  local seed = copyParty(vanillaParty)
+  local ok, result = pcall(function()
+    return Runtime.call("trainer.party", function(_, _, party)
+      return party
+    end, classId, partyKey, seed)
+  end)
+  if ok and type(result) == "table" then
+    return result
+  end
+  return vanillaParty
+end
+
 local function maxLevelGen1(mod, trainerId, partyIndex)
   if not (mod and mod.content and mod.content.trainers) then return 0 end
   local rec = mod.content.trainers:get(trainerId)
   if type(rec) ~= "table" or type(rec.parties) ~= "table" then return 0 end
   if partyIndex then
-    return maxLevelInParty(rec.parties[partyIndex])
+    local party = throughTrainerPartyHook(
+      trainerId, partyIndex, rec.parties[partyIndex]
+    )
+    return maxLevelInParty(party)
   end
   local max = 0
-  for _, party in ipairs(rec.parties) do
-    local m = maxLevelInParty(party)
+  for index, party in ipairs(rec.parties) do
+    local live = throughTrainerPartyHook(trainerId, index, party)
+    local m = maxLevelInParty(live)
     if m > max then max = m end
   end
   return max
@@ -97,21 +145,33 @@ local function nameMatch(row, want)
   return false
 end
 
+-- Gen 2 Battle passes memberId (or index) as the second trainer.party arg.
+local function gen2PartyKey(row, index)
+  if type(row) ~= "table" then return index end
+  return row.id or row.memberId or row.name or index
+end
+
 local function maxLevelGen2(mod, classId, trainerName)
   if not (mod and mod.content and mod.content.trainers) then return 0 end
   local rec = mod.content.trainers:get(classId)
   if type(rec) ~= "table" or type(rec.trainers) ~= "table" then return 0 end
   local max, matched = 0, false
-  for _, t in ipairs(rec.trainers) do
+  for index, t in ipairs(rec.trainers) do
     if nameMatch(t, trainerName) then
       matched = true
-      local m = maxLevelInParty(t.party)
+      local live = throughTrainerPartyHook(
+        classId, gen2PartyKey(t, index), t.party
+      )
+      local m = maxLevelInParty(live)
       if m > max then max = m end
     end
   end
   if matched then return max end
-  for _, t in ipairs(rec.trainers) do
-    local m = maxLevelInParty(t.party)
+  for index, t in ipairs(rec.trainers) do
+    local live = throughTrainerPartyHook(
+      classId, gen2PartyKey(t, index), t.party
+    )
+    local m = maxLevelInParty(live)
     if m > max then max = m end
   end
   return max
@@ -276,5 +336,6 @@ M.isGen2 = isGen2
 M.maxLevelGen1 = maxLevelGen1
 M.maxLevelGen2 = maxLevelGen2
 M.maxLevelGen2Entry = maxLevelGen2Entry
+M.throughTrainerPartyHook = throughTrainerPartyHook
 
 return M

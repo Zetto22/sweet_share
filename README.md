@@ -53,8 +53,10 @@ Works on **Red / Blue / Yellow** and **Gold**.
 ### GYM LVL — Gen 1 RBY
 
 Hard cap: nobody at or above the threshold gains EXP. The number is the
-**highest level** on that boss’s party (read live from trainer data, so
-mods that change gym teams update the cap automatically).
+**highest level** on that boss’s party, using the same live roster battle
+setup uses (trainer registry + `trainer.party` hooks). Mods that patch
+teams in data **or** raise them at battle time (e.g. Stronger Trainers)
+update the cap automatically.
 
 | Your badges | Cap is based on |
 |-------------|-----------------|
@@ -103,8 +105,8 @@ Kanto, a rematch, then Red.
 
 - Content mod (`affects_link: false`). Targets Gen 1 and Gen 2 (`games`).
 - Cap-only mode wraps `applyShare` before `next` (other share mods that use it compose; keep this mod’s priority ≥ theirs).
-- Gym levels are read from `trainers` at runtime — party edits by other mods count.
+- Gym levels follow live boss parties (registry and/or `trainer.party` hooks).
 - Fainted mons and eggs never receive Sweet/capped grants.
 - While **S. EXP SHARE** is ON, Gen 1 EXP.ALL / Gen 2 held EXP.SHARE vanilla passes are replaced; on Gold, unequip EXP.SHARE if you want stat EXP free of the item tax.
-- GitHub releases: tag **`v1.1.3`** + asset **`sweet_share-1.1.3.zip`**.
+- GitHub releases: tag **`vX.Y.Z`** + asset **`sweet_share-X.Y.Z.zip`**.
 - License: [MIT](LICENSE) · Changes: [CHANGELOG.md](CHANGELOG.md)
