@@ -55,7 +55,6 @@ local function resolveGame(mod, battle)
   if battle and battle.save then
     return {
       generation = 2,
-      version = "gold",
       save = battle.save,
       options = battle.save.options,
     }
@@ -362,25 +361,6 @@ local function sayShare(battle, text)
   end
 end
 
--- Gen 2 giveExperiencePass always emits per-mon "X gained N EXP" lines.
--- Bench awards already have our summary; strip those texts (keep level-ups).
-local function silenceBenchExpEvents(battle, benchIdx)
-  if not (battle and type(battle.events) == "table" and type(benchIdx) == "table") then
-    return
-  end
-  local want = {}
-  for _, index in ipairs(benchIdx) do
-    want[index] = true
-  end
-  for _, event in ipairs(battle.events) do
-    if type(event) == "table"
-        and event.kind == "experience"
-        and want[event.index] then
-      event.text = nil
-    end
-  end
-end
-
 -- Prefer a non-traded sample so the line matches the common (unboosted) grant.
 local function messageSample(battle, recipients)
   for _, mon in ipairs(recipients) do
@@ -410,145 +390,15 @@ local function modIsOn(game, modId, battle)
   return true
 end
 
--- Gen 2: let vanilla pay participants (proven path), then pay the bench
--- half via giveExperiencePass. Replacing the whole award was falling through
--- to vanilla on any error and leaving the bench at 0.
-local function distributeSweetGen2(mod, ctx, nextFn)
+-- One path for Gen 1 and Gen 2: both pass applyShare(mon, split, announce),
+-- and Gen 2 honours `announce` since engine v0.2.19. Fighters get full EXP
+-- each (announced), the bench half (silent) under one summary line.
+local function distributeSweet(mod, ctx, nextFn)
   local battle = ctx.battle
   local game = resolveGame(mod, battle)
   local party = partyOf(battle, game)
-  if type(party) ~= "table" then
+  if type(party) ~= "table" or type(ctx.applyShare) ~= "function" then
     return nextFn(ctx)
-  end
-
-  local cap = readCap(game, battle)
-  local gate, hard = resolveGate(mod, game, cap, party)
-
-  local fought = {}
-  for _, mon in ipairs(ctx.alive or {}) do
-    if monConscious(mon) then
-      fought[mon] = true
-    end
-  end
-  if type(ctx.recipients) == "table" then
-    for _, index in ipairs(ctx.recipients) do
-      local mon = party[index]
-      if monConscious(mon) then
-        fought[mon] = true
-      end
-    end
-  end
-
-  -- When a level gate is active, vanillaAward ignores ctx.applyShare — pay
-  -- everyone ourselves (fighters full, bench half) with halved forced off.
-  if gate ~= nil then
-    local loser = ctx.loser
-    local def = nil
-    if battle and type(battle.speciesDef) == "function" and loser then
-      def = battle:speciesDef(loser)
-    end
-    def = def or (loser and loser.def)
-    if not (loser and def and type(battle.giveExperiencePass) == "function") then
-      return nextFn(ctx)
-    end
-
-    local fighterIdx, benchIdx, benchMons = {}, {}, {}
-    for index, mon in ipairs(party) do
-      if monConscious(mon) then
-        if fought[mon] then
-          if not blockedByGate(mon, gate, hard, fought) then
-            fighterIdx[#fighterIdx + 1] = index
-          end
-        else
-          if not blockedByGate(mon, gate, hard, fought) then
-            benchIdx[#benchIdx + 1] = index
-            benchMons[#benchMons + 1] = mon
-          end
-        end
-      end
-    end
-
-    suppressShareTax = true
-    local ok, err = xpcall(function()
-      if #fighterIdx > 0 then
-        battle:giveExperiencePass(loser, def, fighterIdx, FIGHTER_DIVISOR, false)
-      end
-      if #benchIdx > 0 then
-        local sample = messageSample(battle, benchMons)
-        local expAmount = 0
-        if sample then
-          local okPred, amount = pcall(predictGrantedExp, ctx, sample, BENCH_DIVISOR)
-          if okPred and amount then expAmount = amount end
-        end
-        pcall(sayShare, battle, shareLine(#benchIdx, expAmount))
-        battle:giveExperiencePass(loser, def, benchIdx, BENCH_DIVISOR, false)
-        silenceBenchExpEvents(battle, benchIdx)
-      end
-    end, traceErr)
-    suppressShareTax = false
-    if not ok then
-      mod.log:warn("gen2 gated award failed: %s", tostring(err))
-      return nextFn(ctx)
-    end
-    return
-  end
-
-  -- Cap OFF (common case): vanilla participants, then our bench pass.
-  nextFn(ctx)
-
-  local loser = ctx.loser
-  if not (battle and loser and type(battle.giveExperiencePass) == "function") then
-    mod.log:warn("gen2 bench skip: battle/loser/giveExperiencePass missing")
-    return
-  end
-  local def = nil
-  if type(battle.speciesDef) == "function" then
-    def = battle:speciesDef(loser)
-  end
-  def = def or loser.def
-  if not def then
-    mod.log:warn("gen2 bench skip: no species def for loser")
-    return
-  end
-
-  local benchIdx, benchMons = {}, {}
-  for index, mon in ipairs(party) do
-    if monConscious(mon) and not fought[mon] then
-      benchIdx[#benchIdx + 1] = index
-      benchMons[#benchMons + 1] = mon
-    end
-  end
-  if #benchIdx == 0 then
-    return
-  end
-
-  local sample = messageSample(battle, benchMons)
-  local expAmount = 0
-  if sample then
-    local okPred, amount = pcall(predictGrantedExp, ctx, sample, BENCH_DIVISOR)
-    if okPred and amount then expAmount = amount end
-  end
-  pcall(sayShare, battle, shareLine(#benchIdx, expAmount))
-
-  suppressShareTax = true
-  local ok, err = pcall(function()
-    battle:giveExperiencePass(loser, def, benchIdx, BENCH_DIVISOR, false)
-    silenceBenchExpEvents(battle, benchIdx)
-  end)
-  suppressShareTax = false
-  if not ok then
-    mod.log:warn("gen2 bench grant failed: %s", tostring(err))
-  else
-    mod.log:info("gen2 bench granted to %d mon(s)", #benchIdx)
-  end
-end
-
-local function distributeSweetGen1(mod, ctx)
-  local battle = ctx.battle
-  local game = resolveGame(mod, battle)
-  local party = partyOf(battle, game)
-  if not party or type(ctx.applyShare) ~= "function" then
-    return
   end
 
   local cap = readCap(game, battle)
@@ -630,13 +480,6 @@ local function distributeSweetGen1(mod, ctx)
   end
 end
 
-local function distributeSweet(mod, ctx, nextFn)
-  if isGen2Award(ctx) then
-    return distributeSweetGen2(mod, ctx, nextFn)
-  end
-  return distributeSweetGen1(mod, ctx)
-end
-
 -- Share OFF + cap ON: let vanilla / other award mods run, but filter applyShare.
 local function withLevelCap(mod, ctx, game, nextFn)
   local battle = ctx.battle
@@ -664,6 +507,28 @@ local function withLevelCap(mod, ctx, game, nextFn)
   local rawApply = ctx.applyShare
   if type(rawApply) ~= "function" then
     return nextFn(ctx)
+  end
+
+  -- Gen 2 vanilla pays through giveExperiencePass and never calls applyShare,
+  -- so a wrapped applyShare would filter nothing. Rebuild its two passes
+  -- (participants split by count, then EXP SHARE holders) with the gate.
+  if isGen2Award(ctx) then
+    party = party or {}
+    for _, mon in ipairs(ctx.alive or {}) do
+      if not blockedByGate(mon, gate, hard, fought) then
+        rawApply(mon, math.max(1, ctx.participants or 1), true)
+      end
+    end
+    local holders = ctx.holders or {}
+    if ctx.halved and #holders > 0 then
+      for _, index in ipairs(holders) do
+        local mon = party[index]
+        if mon and not blockedByGate(mon, gate, hard, fought) then
+          rawApply(mon, #holders, true)
+        end
+      end
+    end
+    return
   end
 
   ctx.applyShare = function(mon, split, announce)

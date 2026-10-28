@@ -17,7 +17,7 @@ runs, and **S. LEVEL CAP** can still filter who gets EXP.
 **GYM LVL** is a hard cap from the next gym leader (or post-game rules
 below): anyone at or above that level gets no EXP.
 
-Works on **Red / Blue / Yellow** and **Gold**.
+Works on **Red / Blue / Yellow** and **Gold / Silver / Crystal**.
 
 ## Install
 
@@ -79,18 +79,12 @@ so on until the Champion.
 Same hard-cap rule; the ladder continues through Johto, the League,
 Kanto, a rematch, then Red.
 
-**Johto gyms (next leader)**
+**Johto gyms**
 
-| Johto badges | Cap is based on |
-|--------------|-----------------|
-| 0 | Falkner (Violet) |
-| 1 | Bugsy (Azalea) |
-| 2 | Whitney (Goldenrod) |
-| 3 | Morty (Ecruteak) |
-| 4 | Chuck (Cianwood) |
-| 5 | Jasmine (Olivine) |
-| 6 | Pryce (Mahogany) |
-| 7 | Clair (Blackthorn) |
+The cap is the **lowest** ace among the leaders you have not beaten yet, so
+taking gyms out of order (e.g. Jasmine before Chuck) works:
+Falkner, Bugsy, Whitney, Morty, Chuck, Jasmine, Pryce, Clair.
+The same rule applies to the Kanto gyms in Red / Blue / Yellow.
 
 **After 8 Johto badges**
 
@@ -107,6 +101,6 @@ Kanto, a rematch, then Red.
 - Cap-only mode wraps `applyShare` before `next` (other share mods that use it compose; keep this mod’s priority ≥ theirs).
 - Gym levels follow live boss parties (registry and/or `trainer.party` hooks).
 - Fainted mons and eggs never receive Sweet/capped grants.
-- While **S. EXP SHARE** is ON, Gen 1 EXP.ALL / Gen 2 held EXP.SHARE vanilla passes are replaced; on Gold, unequip EXP.SHARE if you want stat EXP free of the item tax.
+- While **S. EXP SHARE** is ON, Gen 1 EXP.ALL / Gen 2 held EXP.SHARE vanilla passes are replaced; on Gold / Silver / Crystal, unequip EXP.SHARE if you want stat EXP free of the item tax.
 - GitHub releases: tag **`vX.Y.Z`** + asset **`sweet_share-X.Y.Z.zip`**.
 - License: [MIT](LICENSE) · Changes: [CHANGELOG.md](CHANGELOG.md)

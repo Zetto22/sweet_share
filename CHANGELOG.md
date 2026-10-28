@@ -5,6 +5,30 @@ All notable changes to **Sweet Share** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project versions with the `version` field in `manifest.json`.
 
+## [1.3.0] — 2026-10-28
+
+<!-- release-title: Silver, Crystal and out-of-order gyms -->
+
+### Added
+
+- **Silver** and **Crystal** support (all Gen 2 games).
+
+### Changed
+
+- **GYM LVL** uses the lowest ace among leaders you have not beaten yet,
+  so gyms taken out of order (Jasmine before Chuck, Koga before Erika…)
+  no longer cap you at a leader you already beat.
+- With **S. EXP SHARE** ON, Gen 2 fighters now get full EXP each, like
+  Gen 1 and as documented (before, Gen 2 split it among fighters).
+- Gen 2 bench EXP is paid silently under the single summary line through
+  the engine's `applyShare` (needs gen1recomp **0.2.19+**; older builds
+  also print one line per Pokémon).
+
+### Fixed
+
+- Gen 2 with **S. EXP SHARE** OFF and a **S. LEVEL CAP** on: the cap now
+  actually blocks EXP (it was ignored).
+
 ## [1.2.0] — 2026-08-20
 
 <!-- release-title: GYM LVL follows live trainer parties -->

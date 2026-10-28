@@ -209,25 +209,25 @@ local function countOwned(ordered, ownedMap)
   return n
 end
 
-local function gen1BadgeCount(mod, save)
-  local inv = save and save.inventory
-  if not inv then return 0 end
-  local n = 0
-  local list = nil
-  if mod.content.constants and mod.content.constants.get then
-    list = mod.content.constants:get("badges")
-  end
-  if type(list) == "table" and #list > 0 then
-    for _, entry in ipairs(list) do
-      local item = (type(entry) == "table" and (entry.item or entry.id)) or entry
-      if item and inv[item] then n = n + 1 end
+-- Gym order is free in places (Gen 1: Erika/Koga/Sabrina; Gen 2: Chuck/
+-- Jasmine), so badge COUNT cannot pick the next leader. Cap = lowest ace
+-- among leaders not yet beaten. Returns 0 when every gym is owned.
+local function nextGymCap(gyms, owned, levelOf)
+  local cap = 0
+  for _, g in ipairs(gyms) do
+    if not owned(g) then
+      local level = levelOf(g)
+      if level > 0 and (cap == 0 or level < cap) then cap = level end
     end
-    return n
   end
-  for _, g in ipairs(M.GEN1_GYMS) do
-    if inv[g.badge] then n = n + 1 end
+  return cap
+end
+
+local function allOwned(gyms, owned)
+  for _, g in ipairs(gyms) do
+    if not owned(g) then return false end
   end
-  return n
+  return true
 end
 
 local function gen1ChampionCap(mod)
@@ -287,10 +287,12 @@ function M.resolve(mod, game)
   if isGen2(game) then
     local save = game.save
     local player = save and save.player
-    local johtoN = countBadgeList(player and player.badges, M.GEN2_JOHTO_GYMS)
-    if johtoN < #M.GEN2_JOHTO_GYMS then
-      local nextGym = M.GEN2_JOHTO_GYMS[johtoN + 1]
-      local cap = maxLevelGen2Entry(mod, nextGym)
+    local johto = type(player and player.badges) == "table" and player.badges or {}
+    local function johtoOwned(g) return johto[g.badge] and true or false end
+    if not allOwned(M.GEN2_JOHTO_GYMS, johtoOwned) then
+      local cap = nextGymCap(M.GEN2_JOHTO_GYMS, johtoOwned, function(g)
+        return maxLevelGen2Entry(mod, g)
+      end)
       return cap > 0 and cap or nil
     end
     if not beatGen2EliteFour(save) then
@@ -322,10 +324,13 @@ function M.resolve(mod, game)
     return cap > 0 and cap or nil
   end
 
-  local n = gen1BadgeCount(mod, game and game.save)
-  if n < #M.GEN1_GYMS then
-    local nextGym = M.GEN1_GYMS[n + 1]
-    local cap = maxLevelGen1(mod, nextGym.trainer, nextGym.party)
+  local save = game and game.save
+  local inv = type(save and save.inventory) == "table" and save.inventory or {}
+  local function gen1Owned(g) return inv[g.badge] and true or false end
+  if not allOwned(M.GEN1_GYMS, gen1Owned) then
+    local cap = nextGymCap(M.GEN1_GYMS, gen1Owned, function(g)
+      return maxLevelGen1(mod, g.trainer, g.party)
+    end)
     return cap > 0 and cap or nil
   end
   local cap = gen1ChampionCap(mod)
