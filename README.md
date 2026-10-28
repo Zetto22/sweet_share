@@ -17,7 +17,8 @@ runs, and **S. LEVEL CAP** can still filter who gets EXP.
 **GYM LVL** is a hard cap from the next gym leader (or post-game rules
 below): anyone at or above that level gets no EXP.
 
-Works on **Red / Blue / Yellow** and **Gold / Silver / Crystal**.
+Works on **Red / Blue / Yellow**, **Gold / Silver / Crystal** and
+**FireRed / LeafGreen / Ruby / Sapphire / Emerald**.
 
 ## Install
 
@@ -95,11 +96,22 @@ The same rule applies to the Kanto gyms in Red / Blue / Yellow.
 | 3 | Lance (Champion rematch, after 8 Kanto badges) |
 | 4 | Red (Mt. Silver, after second Hall of Fame) |
 
+### GYM LVL — Gen 3
+
+Same hard-cap rule, lowest ace among leaders not yet beaten (badge flags):
+
+| Game | Gyms | After 8 badges |
+|------|------|----------------|
+| Ruby / Sapphire | Roxanne, Brawly, Wattson, Flannery, Norman, Winona, Tate & Liza, Wallace | Champion Steven |
+| Emerald | Roxanne, Brawly, Wattson, Flannery, Norman, Winona, Tate & Liza, Juan | Champion Wallace |
+| FireRed / LeafGreen | Brock, Misty, Lt. Surge, Erika, Koga, Sabrina, Blaine, Giovanni | Champion (rival) |
+
 ## Notes
 
-- Content mod (`affects_link: false`). Targets Gen 1 and Gen 2 (`games`).
+- Content mod (`affects_link: false`). Targets Gen 1, Gen 2 and Gen 3 (`games`).
 - Cap-only mode wraps `applyShare` before `next` (other share mods that use it compose; keep this mod’s priority ≥ theirs).
 - Gym levels follow live boss parties (registry and/or `trainer.party` hooks).
+- On Gen 3 the bench gets the game's own EXP line per Pokémon (no summary line), and a held EXP. SHARE does not halve Sweet grants.
 - Fainted mons and eggs never receive Sweet/capped grants.
 - While **S. EXP SHARE** is ON, Gen 1 EXP.ALL / Gen 2 held EXP.SHARE vanilla passes are replaced; on Gold / Silver / Crystal, unequip EXP.SHARE if you want stat EXP free of the item tax.
 - GitHub releases: tag **`vX.Y.Z`** + asset **`sweet_share-X.Y.Z.zip`**.

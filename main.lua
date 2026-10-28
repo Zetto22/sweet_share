@@ -40,6 +40,9 @@ end
 -- from any EXP_SHARE holder. Clear it on exp.gain so Sweet modes are not
 -- taxed by the held item (stat-exp may still see halved — unequip to be safe).
 local suppressShareTax = false
+-- Gen 3 only: someone holds EXP SHARE, so the engine pool is already halved.
+-- Only then does exp.gain recompute (other exp.gain mods run otherwise).
+local gen3PoolHalved = false
 
 -- Gen 2 Battle has .save but not .game; options live on Game2.options and are
 -- mirrored to save.options. Prefer the live game, then battle.save.options.
@@ -180,10 +183,18 @@ local function cycleCap(game, direction)
 end
 
 local function monConscious(mon)
-  return mon and (mon.hp or 0) > 0 and not mon.isEgg
+  return mon and (mon.hp or 0) > 0 and not mon.isEgg and not mon.egg
+end
+
+-- Gen 3 battle state carries playerParty; Gen 1 / Gen 2 do not.
+local function isGen3Battle(battle)
+  return type(battle) == "table" and type(battle.playerParty) == "table"
 end
 
 local function partyOf(battle, game)
+  if isGen3Battle(battle) then
+    return battle.playerParty
+  end
   if battle and type(battle.party) == "table" then
     return battle.party
   end
@@ -342,6 +353,9 @@ end
 
 local function predictGrantedExp(ctx, mon, divisor)
   local battle = ctx and ctx.battle
+  if isGen3Battle(battle) then
+    return nil
+  end
   if isGen2Award(ctx) then
     return predictGrantedExpGen2(battle, ctx, mon, divisor)
   end
@@ -413,6 +427,7 @@ local function distributeSweet(mod, ctx, nextFn)
   end
 
   suppressShareTax = true
+  gen3PoolHalved = isGen3Battle(battle) and ctx.halved and true or false
   local ok, err = xpcall(function()
     for _, mon in ipairs(alive) do
       if not blockedByGate(mon, gate, hard, fought) then
@@ -432,6 +447,15 @@ local function distributeSweet(mod, ctx, nextFn)
 
     local n = #recipients
     if n == 0 then
+      return
+    end
+
+    -- Gen 3 has no free-form battle line (text comes from exp_seq), so the
+    -- bench keeps the native "gained N EXP" line per Pokemon.
+    if isGen3Battle(battle) then
+      for _, mon in ipairs(recipients) do
+        ctx.applyShare(mon, BENCH_DIVISOR, true)
+      end
       return
     end
 
@@ -475,6 +499,7 @@ local function distributeSweet(mod, ctx, nextFn)
     end
   end, traceErr)
   suppressShareTax = false
+  gen3PoolHalved = false
   if not ok then
     error(err)
   end
@@ -546,6 +571,20 @@ return function(mod)
   mod.hooks:wrap("exp.gain", function(next, ctx)
     if suppressShareTax and type(ctx) == "table" and ctx.halved then
       ctx.halved = false
+    end
+    -- Gen 3 halves the whole pool when anyone holds EXP SHARE, before the
+    -- split; there is no flag to clear. Recompute the unhalved grant
+    -- (pokefirered battle_script_commands.c Cmd_getexp) while Sweet pays.
+    local def = type(ctx) == "table" and ctx.defeatedDef
+    if suppressShareTax and gen3PoolHalved
+        and type(def) == "table" and def.expYield ~= nil then
+      local base = math.floor((tonumber(def.expYield) or 0)
+        * math.max(1, tonumber(ctx.level) or 1) / 7)
+      local amount = math.max(1, math.floor(base / math.max(1, tonumber(ctx.participants) or 1)))
+      if ctx.luckyEgg then amount = math.floor(amount * 150 / 100) end
+      if ctx.isTrainer then amount = math.floor(amount * 150 / 100) end
+      if ctx.traded then amount = math.floor(amount * 150 / 100) end
+      return amount
     end
     return next(ctx)
   end)

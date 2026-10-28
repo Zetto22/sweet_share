@@ -1,4 +1,4 @@
--- Gym / post-game level caps for Sweet Share (Gen 1 + Gen 2).
+-- Gym / post-game level caps for Sweet Share (Gen 1, Gen 2, Gen 3).
 -- Cap levels come from the live boss party: registry data first, then the
 -- `trainer.party` hook chain (same path battle setup uses). Mods that patch
 -- `content.trainers` or wrap `trainer.party` (e.g. Stronger Trainers) raise
@@ -57,6 +57,27 @@ M.GEN2_LAST_E4 = { classes = { "KAREN" }, name = "KAREN" }
 -- resolve() never drops the cap below the Kanto-leaders max in that phase.
 M.GEN2_REMATCH_CHAMPION = { classes = { "CHAMPION", "LANCE" }, name = "LANCE" }
 M.GEN2_RED = { classes = { "RED" }, name = "RED" }
+
+-- Gen 3: numeric trainer ids (pret constants, registry keys are strings),
+-- badge i = FLAG_BADGE0i_GET. Leaders listed in badge order.
+M.GEN3 = {
+  emerald = {
+    gyms = { 265, 266, 267, 268, 269, 270, 271, 272 }, -- Roxanne .. Juan
+    champion = { 335 }, -- Wallace
+    lastE4 = 264, -- Drake
+  },
+  rs = {
+    gyms = { 265, 266, 267, 268, 269, 270, 271, 272 }, -- Roxanne .. Wallace
+    champion = { 335 }, -- Steven
+    lastE4 = 264, -- Drake
+  },
+  frlg = {
+    -- Brock, Misty, Lt. Surge, Erika, Koga, Sabrina, Blaine, Giovanni
+    gyms = { 414, 415, 416, 417, 418, 420, 419, 350 },
+    champion = { 438, 439, 440 }, -- rival, one per starter
+    lastE4 = 413, -- Lance
+  },
+}
 
 local function maxLevelInParty(party)
   local max = 0
@@ -177,6 +198,36 @@ local function maxLevelGen2(mod, classId, trainerName)
   return max
 end
 
+local function maxLevelGen3(mod, trainerId)
+  if not (mod and mod.content and mod.content.trainers) then return 0 end
+  local ok, rec = pcall(function()
+    return mod.content.trainers:get(tostring(trainerId))
+  end)
+  if not ok or type(rec) ~= "table" or type(rec.party) ~= "table" then return 0 end
+  local live = throughTrainerPartyHook(rec.class, trainerId, rec.party)
+  return maxLevelInParty(live)
+end
+
+local function gen3Version(game)
+  local session = game and game.session
+  local v = session and session.version
+  if type(v) ~= "string" then
+    local okGv, GameVersion = pcall(require, "src.core.GameVersion")
+    if okGv and type(GameVersion) == "table" and GameVersion.get then
+      v = GameVersion.get()
+    end
+  end
+  return v
+end
+
+local function gen3Ladder(game)
+  local v = gen3Version(game)
+  if v == "emerald" then return M.GEN3.emerald end
+  if v == "ruby" or v == "sapphire" then return M.GEN3.rs end
+  if v == "firered" or v == "leafgreen" then return M.GEN3.frlg end
+  return nil
+end
+
 local function maxLevelGen2Entry(mod, entry)
   if type(entry) ~= "table" then return 0 end
   local classes = entry.classes or { entry.class }
@@ -282,8 +333,38 @@ local function countBadgeList(owned, gyms)
   return countOwned(ids, owned)
 end
 
+local function resolveGen3(mod, game)
+  local ladder = gen3Ladder(game)
+  local world = mod and mod.world
+  if not (ladder and world and world.getFlag) then return nil end
+  local gyms = {}
+  for i, id in ipairs(ladder.gyms) do
+    gyms[i] = { id = id, flag = ("FLAG_BADGE%02d_GET"):format(i) }
+  end
+  local function owned(g)
+    local ok, value = pcall(function() return world:getFlag(g.flag) end)
+    return ok and value and true or false
+  end
+  if not allOwned(gyms, owned) then
+    local cap = nextGymCap(gyms, owned, function(g)
+      return maxLevelGen3(mod, g.id)
+    end)
+    return cap > 0 and cap or nil
+  end
+  local cap = 0
+  for _, id in ipairs(ladder.champion) do
+    local m = maxLevelGen3(mod, id)
+    if m > cap then cap = m end
+  end
+  if cap == 0 then cap = maxLevelGen3(mod, ladder.lastE4) end
+  return cap > 0 and cap or nil
+end
+
 --- @return number|nil cap level, or nil if data missing
 function M.resolve(mod, game)
+  if game and game.generation == 3 then
+    return resolveGen3(mod, game)
+  end
   if isGen2(game) then
     local save = game.save
     local player = save and save.player

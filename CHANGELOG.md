@@ -5,6 +5,24 @@ All notable changes to **Sweet Share** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project versions with the `version` field in `manifest.json`.
 
+## [1.4.0] — 2026-10-28
+
+<!-- release-title: Gen 3: FireRed, LeafGreen, Ruby, Sapphire, Emerald -->
+
+### Added
+
+- **FireRed, LeafGreen, Ruby, Sapphire and Emerald** support for
+  **S. EXP SHARE** and every **S. LEVEL CAP** mode.
+- **GYM LVL** on Gen 3: Hoenn leaders (Roxanne to Juan / Wallace, then
+  the Champion) and Kanto leaders on FireRed / LeafGreen (Brock to
+  Giovanni, then the rival Champion), read from the badge flags.
+- On Gen 3, a held **EXP. SHARE** no longer halves Sweet's grants.
+
+### Notes
+
+- Gen 3 has no free-form battle line, so the bench shows the game's own
+  "gained N EXP" line per Pokémon instead of one summary.
+
 ## [1.3.0] — 2026-10-28
 
 <!-- release-title: Silver, Crystal and out-of-order gyms -->
